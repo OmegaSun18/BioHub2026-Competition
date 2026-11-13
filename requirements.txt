@@ -1,15 +1,20 @@
-# GPU Array & 3D Image Processing (replaces cupy / cupyx.scipy.ndimage)
+# GPU Array & 3D Image Processing
 cupy-cuda12x>=13.0.0
 
 # Core Scientific Computing & Optimization
 numpy>=1.26.0
 scipy>=1.12.0
 pandas>=2.2.0
+xarray>=2024.1.0
 
 # Zarr Data I/O & Graph Construction
 zarr>=2.17.0
 numcodecs>=0.12.0
 networkx>=3.2.0
+
+# Headless Fiji / TrackMate Bridge
+pyimagej>=1.5.0
+scyjava>=1.10.0
 
 # Progress Bar & Notebook Execution
 tqdm>=4.66.0

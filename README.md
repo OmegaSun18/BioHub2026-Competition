@@ -3,7 +3,7 @@
 Build the dockerfile with:
 * For a public repository:
     ```bash
-    docker build -t biohub2026:latest .
+    docker build -t biohub2026-fiji:latest .
     ```
 * For a private repository (pass a GitHub Personal Access Token):
     ```bash
@@ -14,9 +14,10 @@ Run the dockerfile with:
 
 ```bash
 docker run --gpus all -it --rm \
-    --shm-size=16g \
+    --shm-size=8g \
+    -e _JAVA_OPTIONS="-Xmx16g" \
     -p 8888:8888 \
-    -v /mnt/data/kaggle/biohub-cell-tracking-during-development:/data/biohub-cell-tracking-during-development:ro \
-    -v $(pwd)/outputs:/workspace/outputs \
-    biohub2026:latest
+    -v /mnt/data/kaggle/biohub-cell-tracking-during-development:/kaggle/input/biohub-cell-tracking-during-development:ro \
+    -v $(pwd)/working:/kaggle/working \
+    biohub2026-fiji:latest
 ```
