@@ -7,10 +7,10 @@ scipy>=1.12.0
 pandas>=2.2.0
 xarray>=2024.1.0
 
-# Zarr Data I/O & Graph Construction
-zarr>=2.17.0
-numcodecs>=0.12.0
-networkx>=3.2.0
+# Zarr Data I/O (v3 required for BioHub 2026 Zarr v3 datasets) & Graph Construction
+zarr==3.2.1
+numcodecs==0.15.1
+donfig==0.8.1.post1
 
 # Headless Fiji / TrackMate Bridge
 pyimagej>=1.5.0

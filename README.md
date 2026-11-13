@@ -15,14 +15,14 @@ Run the dockerfile with:
 ```bash
 mkdir -p /mnt/data/biohub_working
 
-# 3. Run the container with /mnt/data exposed to the container
-docker run --gpus all -it --rm \
+# Start and drop directly into bash (CPU-only node; add --gpus all on GPU nodes)
+docker run -it --name biohub_dev \
     --shm-size=8g \
     -e _JAVA_OPTIONS="-Xmx16g" \
-    -p 8888:8888 \
     -v /mnt/data:/mnt/data \
     -v /mnt/data/kaggle/biohub-cell-tracking-during-development:/kaggle/input/biohub-cell-tracking-during-development:ro \
     -v /mnt/data/biohub_working:/kaggle/working \
+    -v ~/shankar/BioHub2026-Competition:/workspace \
     biohub2026-fiji:latest
 ```
 

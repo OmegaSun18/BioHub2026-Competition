@@ -1,11 +1,13 @@
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# Ubuntu 24.04 ships with Python 3.12 natively (required for zarr==3.2.1)
+FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    FIJI_PATH=/opt/Fiji.app
+    FIJI_PATH=/opt/Fiji.app \
+    DISPLAY=:99
 
-# 1. Install Python, Git, download tools, and Xvfb/X11 libs (for headless Java AWT/Swing)
+# 1. Install Python 3.12, Git, download tools, CLI utilities, and Xvfb
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -14,6 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
+    vim \
+    less \
+    tmux \
+    htop \
     ca-certificates \
     xvfb \
     libxrender1 \
@@ -38,10 +44,9 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
         git clone --branch main --single-branch https://github.com/OmegaSun18/BioHub2026-Competition.git .; \
     fi
 
-# 4. Install Python dependencies (cupy, zarr, pyimagej, scyjava, etc.)
+# 4. Install Python dependencies (Ubuntu 24.04 allows --break-system-packages in containers)
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
 # 5. Provision Java 21 via scyjava/cjdk, pre-warm cache, and verify TrackMate loads
 RUN python -c "\
@@ -55,7 +60,9 @@ print('Fiji version:', ij.getVersion(), '| TrackMate loaded:', TrackMate)"
 # 6. Create Kaggle-compatible mount points
 RUN mkdir -p /kaggle/input/biohub-cell-tracking-during-development /kaggle/working
 
-EXPOSE 8888
+# 7. Auto-start Xvfb in the background whenever the container launches
+RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1024x768x24 >/dev/null 2>&1 &\nexec "$@"\n' > /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh
 
-# Run JupyterLab inside Xvfb so TrackMate classes work headlessly
-CMD ["xvfb-run", "-a", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/bin/bash"]
