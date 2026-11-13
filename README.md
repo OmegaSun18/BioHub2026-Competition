@@ -13,11 +13,28 @@ Build the dockerfile with:
 Run the dockerfile with:
 
 ```bash
+mkdir -p /mnt/data/biohub_working
+
+# 3. Run the container with /mnt/data exposed to the container
 docker run --gpus all -it --rm \
     --shm-size=8g \
     -e _JAVA_OPTIONS="-Xmx16g" \
     -p 8888:8888 \
+    -v /mnt/data:/mnt/data \
     -v /mnt/data/kaggle/biohub-cell-tracking-during-development:/kaggle/input/biohub-cell-tracking-during-development:ro \
-    -v $(pwd)/working:/kaggle/working \
+    -v /mnt/data/biohub_working:/kaggle/working \
     biohub2026-fiji:latest
+```
+
+Add the following snipped to all notebooks or python files before anything is run:
+```python
+import scyjava
+import imagej
+
+# Must be called BEFORE imagej.init() so scyjava uses the cached Java 21 JDK
+scyjava.config.set_java_constraints(fetch=True, vendor='zulu', version='21')
+scyjava.config.add_option('-Djava.awt.headless=true')
+
+ij = imagej.init('/opt/Fiji.app', mode='headless')
+TrackMate = scyjava.jimport('fiji.plugin.trackmate.TrackMate')
 ```
