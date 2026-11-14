@@ -3,6 +3,7 @@ import os
 import numpy as np
 import zarr
 
+ORIG_TRAIN_DIR = '/kaggle/input/biohub-cell-tracking-during-development/train'
 DEV_DIR = '/kaggle/working/split_dataset/dev'
 TEST_DIR = '/kaggle/working/split_dataset/test'
 
@@ -12,8 +13,16 @@ assert len(dev_geffs) > 0, "No split .geff files found!"
 empty_test_files = []
 short_test_files = []
 
+tot_orig_est = 0
+tot_dev_est = 0
+tot_test_est = 0
 
-def validate_geff_with_zarr(geff_path: str, expected_max_t: int = 49) -> tuple[int, int]:
+
+def validate_geff_with_zarr(
+    geff_path: str,
+    expected_estimated_nodes: int,
+    expected_max_t: int = 49,
+) -> tuple[int, int, int]:
     g = zarr.open_group(geff_path, mode='r')
     geff_meta = dict(g.attrs).get('geff', {})
 
@@ -33,8 +42,9 @@ def validate_geff_with_zarr(geff_path: str, expected_max_t: int = 49) -> tuple[i
         assert arr.shape == (n_nodes,), f"{geff_path}: '{prop_name}' shape {arr.shape} != ({n_nodes},)"
 
     # 3. Verify metadata estimated_number_of_nodes & axes min/max bounds
-    assert geff_meta['extra']['estimated_number_of_nodes'] == n_nodes, (
-        f"{geff_path}: estimated_number_of_nodes mismatch!"
+    actual_est = int(geff_meta['extra']['estimated_number_of_nodes'])
+    assert actual_est == expected_estimated_nodes, (
+        f"{geff_path}: estimated_number_of_nodes {actual_est} != expected {expected_estimated_nodes}!"
     )
 
     prop_map = {'t': t_vals, 'z': z_vals, 'y': y_vals, 'x': x_vals}
@@ -62,18 +72,33 @@ def validate_geff_with_zarr(geff_path: str, expected_max_t: int = 49) -> tuple[i
             f"{geff_path}: dangling edge endpoint found!"
         )
 
-    return n_nodes, n_edges
+    return n_nodes, n_edges, actual_est
 
 
 for dev_geff_path in dev_geffs:
     stem = os.path.splitext(os.path.basename(dev_geff_path))[0]
+    orig_geff_path = os.path.join(ORIG_TRAIN_DIR, f"{stem}.geff")
     test_geff_path = os.path.join(TEST_DIR, f"{stem}.geff")
     dev_zarr_path = os.path.join(DEV_DIR, f"{stem}.zarr")
     test_zarr_path = os.path.join(TEST_DIR, f"{stem}.zarr")
 
+    # Read original estimated_number_of_nodes and compute expected dev/test halves
+    orig_g = zarr.open_group(orig_geff_path, mode='r')
+    orig_est = int(dict(orig_g.attrs)['geff']['extra']['estimated_number_of_nodes'])
+    expected_dev_est = orig_est // 2
+    expected_test_est = orig_est - expected_dev_est
+
     # Validate both GEFF stores purely via Zarr
-    dev_nodes, dev_edges = validate_geff_with_zarr(dev_geff_path)
-    test_nodes, test_edges = validate_geff_with_zarr(test_geff_path)
+    dev_nodes, dev_edges, dev_est = validate_geff_with_zarr(dev_geff_path, expected_dev_est)
+    test_nodes, test_edges, test_est = validate_geff_with_zarr(test_geff_path, expected_test_est)
+
+    assert dev_est + test_est == orig_est, (
+        f"{stem}: dev_est ({dev_est}) + test_est ({test_est}) != orig_est ({orig_est})"
+    )
+
+    tot_orig_est += orig_est
+    tot_dev_est += dev_est
+    tot_test_est += test_est
 
     # Check raw Zarr frame counts
     dev_t = zarr.open_group(dev_zarr_path, mode='r')['0'].shape[0]
@@ -85,6 +110,7 @@ for dev_geff_path in dev_geffs:
         short_test_files.append((stem, dev_t, test_t, test_nodes))
 
 print(f"Validated {len(dev_geffs)} paired dev/test files purely with zarr!")
+print(f"Estimated nodes total -> Original: {tot_orig_est:,} | Dev: {tot_dev_est:,} | Test: {tot_test_est:,} | Sum: {tot_dev_est + tot_test_est:,}")
 print(f"Files with EMPTY test split (T_test=0 or 0 nodes): {len(empty_test_files)}")
 print(f"Files with PARTIAL test split (1 <= T_test < 50) : {len(short_test_files)}")
 

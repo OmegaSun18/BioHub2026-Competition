@@ -20,7 +20,7 @@ os.makedirs(TEST_DIR, exist_ok=True)
 # ==============================================================================
 # Helper 1: Write a GEFF slice (Zarr v3 + updated GEFF v1.1 metadata)
 # ==============================================================================
-def write_geff_slice(src_group, out_geff_path, node_mask, t_offset=0):
+def write_geff_slice(src_group, out_geff_path, node_mask, t_offset=0, estimated_nodes=None):
     if os.path.exists(out_geff_path):
         shutil.rmtree(out_geff_path)
 
@@ -123,8 +123,8 @@ def write_geff_slice(src_group, out_geff_path, node_mask, t_offset=0):
                     axis['min'] = None
                     axis['max'] = None
 
-    if isinstance(geff_meta.get('extra'), dict) and 'estimated_number_of_nodes' in geff_meta['extra']:
-        geff_meta['extra']['estimated_number_of_nodes'] = n_nodes
+    if estimated_nodes is not None:
+        geff_meta.setdefault('extra', {})['estimated_number_of_nodes'] = int(estimated_nodes)
 
     dst_group.attrs['geff'] = geff_meta
     return n_nodes, n_edges
@@ -162,8 +162,19 @@ def split_geff_file(src_geff_path, dev_geff_path, test_geff_path):
     if bad_t50_node_ids:
         test_mask &= ~np.isin(node_ids, list(bad_t50_node_ids))
 
-    dev_stats = write_geff_slice(g, dev_geff_path, dev_mask, t_offset=0)
-    test_stats = write_geff_slice(g, test_geff_path, test_mask, t_offset=50)
+    # Split estimated_number_of_nodes evenly across dev and test (preserving exact sum)
+    orig_extra = dict(g.attrs).get('geff', {}).get('extra', {})
+    orig_est = orig_extra.get('estimated_number_of_nodes')
+    if orig_est is not None:
+        orig_est = int(orig_est)
+        dev_est = orig_est // 2
+        test_est = orig_est - dev_est
+    else:
+        dev_est = None
+        test_est = None
+
+    dev_stats = write_geff_slice(g, dev_geff_path, dev_mask, t_offset=0, estimated_nodes=dev_est)
+    test_stats = write_geff_slice(g, test_geff_path, test_mask, t_offset=50, estimated_nodes=test_est)
     return len(bad_t49_node_ids), dev_stats, test_stats
 
 
