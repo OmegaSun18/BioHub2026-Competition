@@ -1,0 +1,17 @@
+# Shared settings. Every variant inherits this and changes only what makes it a different experiment.
+name: base
+data:
+  root: /data            # contains train/<video>.zarr + <video>.geff  (the DEV half: frames 0-49)
+  subdir: train
+  n_val: 20
+  split_seed: 7
+train:
+  steps: 2000
+  bs: 8
+  lr: 0.001
+  workers: 8
+  amp: bf16
+  seed: 0
+eval:
+  floor: 0.02
+  frames_per_video: 6
