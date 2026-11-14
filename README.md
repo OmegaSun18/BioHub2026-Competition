@@ -16,7 +16,7 @@ Run the dockerfile with:
 mkdir -p /mnt/data/biohub_working
 
 # Start and drop directly into bash (CPU-only node; add --gpus all on GPU nodes)
-docker run -it --name biohub_dev \
+docker run -it --name biohub_dev_shankar \
     --shm-size=8g \
     -e _JAVA_OPTIONS="-Xmx16g" \
     -v /mnt/data:/mnt/data \
