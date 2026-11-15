@@ -15,8 +15,8 @@ class CentroidDataset(Dataset):
     """Random patches: (F, z, y, x) normalised frames t-before .. t+after (F = 1 for the raw model) + the centre-heat target of frame t.
     One brightness gain and one flip are applied to the whole stack, so the frames of a stack stay consistent with each other."""
 
-    def __init__(self, names, data_dir, length, patch, margin, sigma_um, before=0, after=0, p_pos=0.7):
-        self.names, self.dir, self.length, self.p_pos = list(names), str(data_dir), length, p_pos
+    def __init__(self, names, data_dir, length, patch, margin, sigma_um, before=0, after=0, p_pos=0.7, seed=8001):
+        self.names, self.dir, self.length, self.p_pos, self.seed = list(names), str(data_dir), length, p_pos, seed
         self.patch, self.margin, self.sigma_um, self.before, self.after = tuple(patch), tuple(margin), sigma_um, before, after
         self.gt = {n: io.load_gt(Path(data_dir) / f"{n}.geff") for n in self.names}
         self.index = [(n, t, k) for n in self.names for t, p in self.gt[n].items() for k in range(len(p))]
@@ -38,7 +38,7 @@ class CentroidDataset(Dataset):
     def __getitem__(self, i):
         if self.rng is None:
             wi = torch.utils.data.get_worker_info()
-            self.rng = np.random.default_rng(None if wi is None else wi.seed % 2**32)
+            self.rng = np.random.default_rng([self.seed, 0 if wi is None else wi.id])        # one reproducible stream per loader worker
         r, P = self.rng, self.patch
         if r.random() < self.p_pos and self.index:
             n, t, k = self.index[r.integers(len(self.index))]

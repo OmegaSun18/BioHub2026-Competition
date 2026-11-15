@@ -21,7 +21,10 @@ def load_gt(geff_path: str | Path) -> dict[int, np.ndarray]:
     import tracksdata as td                                      # imported lazily: only needed when real annotations are read
     g = td.graph.IndexedRXGraph.from_geff(str(geff_path))
     g = g[0] if isinstance(g, tuple) else g
-    nd = g.node_attrs().select(["t", "z", "y", "x"]).to_numpy().astype(np.float64)
+    df = g.node_attrs()
+    if df.height == 0 or not {"z", "y", "x"} <= set(df.columns):      # a video without annotated cells: the .geff holds no positions at all
+        return {}
+    nd = df.select(["t", "z", "y", "x"]).to_numpy().astype(np.float64)
     out: dict[int, list] = {}
     for r in nd:
         out.setdefault(int(r[0]), []).append(np.round(r[1:4]))

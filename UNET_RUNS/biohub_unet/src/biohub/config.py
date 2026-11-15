@@ -22,7 +22,17 @@ class DataCfg:
 
 @dataclass
 class FeatureCfg:
-    kind: str = "raw"               # registered feature builder: raw | temporal_stack | temporal_diff
+    kind: str = "raw"               # base input: raw_only | p_only | raw | temporal_stack | temporal_diff | temporal_full
+    extras: list = field(default_factory=list)   # extra channels computed from P of frame t: dog | edge | erode | watershed
+    dog_um: float = 2.5             # DoG radius (sigma = um/1.414, second sigma 1.6x), x dog_gain
+    dog_gain: float = 4.0
+    edge_smooth_um: float = 0.5     # 3D gradient magnitude of P, x edge_gain
+    edge_gain: float = 2.0
+    erode_um: float = 2.0           # grey erosion of P with a box of +-erode_um (per axis, in voxels of that axis): thin bridges between touching cells vanish
+    ws_down: int = 2                # watershed on an xy-down-sampled copy (the boundary map is up-sampled again): ~5x cheaper
+    ws_smooth_um: float = 1.6
+    ws_min_dist: int = 3            # min distance (voxels of the down-sampled grid) between watershed markers
+    ws_thr: float = 0.05            # markers need smoothed P above this
     floor: float = 0.02             # P = (dehaze(balance(raw)) - floor).clamp(0)
     bal_eps: float = 0.05
     bal_max: float = 4.0
@@ -33,10 +43,20 @@ class FeatureCfg:
     down: int = 4
 
 
+SIZES = {   # width presets. medium / large use BatchNorm + channel dropout.   [dropout values are guesses, untested]
+    "small": dict(ch=[16, 32, 64, 128, 128], norm="group", dropout=0.0),
+    "medium": dict(ch=[32, 64, 128, 256, 256], norm="batch", dropout=0.1),
+    "large": dict(ch=[48, 96, 192, 384, 384], norm="batch", dropout=0.2),
+}
+
+
 @dataclass
 class ModelCfg:
     kind: str = "unet3d"
-    ch: list = field(default_factory=lambda: [16, 32, 64, 128, 128])
+    size: str = "small"             # small | medium | large (see SIZES); ch / norm / dropout below override the preset when set
+    ch: list | None = None
+    norm: str | None = None         # group | batch
+    dropout: float | None = None
     pools: list = field(default_factory=lambda: [[1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2]])
 
 
@@ -52,7 +72,7 @@ class TrainCfg:
     max_bad: int = 30
     p_pos: float = 0.7              # share of patches centred around an annotated cell
     w_bg: float = 0.5               # weight of background voxels in the heat loss
-    seed: int = 0
+    seed: int = 8001                # seeds torch, numpy, the patch sampler of every loader worker and the count-loss frame sampler
     count_w: float = 1.0            # count loss (band penalty). 0 for count_w and total_w switches it off
     total_w: float = 1.0
     frame_band: list = field(default_factory=lambda: [0.75, 1.25])
@@ -68,6 +88,7 @@ class EvalCfg:
     floor: float = 0.02
     nms: list = field(default_factory=lambda: [3, 7, 7])
     radius_um: float = 7.0
+    dup_um: float = 0.0             # drop a peak that lies within dup_um of a stronger one (0 = off). Choose it with `biohub sweep`, not by guessing
     frames_per_video: int = 6
     fracs: list = field(default_factory=lambda: [0.8, 1.0, 1.2])
 
@@ -81,6 +102,17 @@ class Config:
     train: TrainCfg = field(default_factory=TrainCfg)
     eval: EvalCfg = field(default_factory=EvalCfg)
     out_dir: str = "runs"           # runs/<name>/<timestamp>/
+
+
+def resolve_model(mc: ModelCfg) -> dict:
+    """-> {'ch', 'norm', 'dropout'} with the preset of mc.size filled in wherever the config leaves a value unset"""
+    if mc.size not in SIZES:
+        raise KeyError(f"unknown model size '{mc.size}'. Available: {sorted(SIZES)}")
+    d = dict(SIZES[mc.size])
+    for k in ("ch", "norm", "dropout"):
+        if getattr(mc, k) is not None:
+            d[k] = getattr(mc, k)
+    return d
 
 
 def _merge(a: dict, b: dict) -> dict:

@@ -34,7 +34,11 @@ class Context:
     options: dict = field(default_factory=dict)     # stage options from the command line
 
     def path(self, kind: str) -> Path:
-        return Path(self.overrides[kind]) if kind in self.overrides else self.run_dir / ARTIFACTS[kind]
+        if kind in self.overrides:
+            return Path(self.overrides[kind])
+        if kind == "metrics":                                           # eval_<split>.json: val, train or all (the evaluate stage writes the file of the split it was given)
+            return self.run_dir / f"eval_{self.options.get('tag', 'val')}.json"
+        return self.run_dir / ARTIFACTS[kind]
 
 
 class Stage:

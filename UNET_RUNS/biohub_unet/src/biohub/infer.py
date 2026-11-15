@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 
 from . import config as C
+from .constants import SCALE
 from .data import io
 from .data.norm import norm_raw
 from .features import build_features
@@ -59,8 +60,25 @@ def predict_heat(model, builder, arr, t: int, sc, device: str, amp: str = "bf16"
     return torch.sigmoid(out[0, 0].float())
 
 
-def centroid_peaks(heat, floor: float = 0.1, nms=(3, 7, 7)):
-    """local maxima of the heat (window nms voxels) above floor -> (voxel idx (N,3), scores (N,))"""
+def dedupe_peaks(idx, s, dup_um: float):
+    """Distance suppression in um: go through the peaks from the highest score down; a peak that lies within dup_um of a stronger kept peak is dropped.
+    dup_um <= 0 keeps everything."""
+    if dup_um <= 0 or len(idx) < 2:
+        return idx, s
+    from scipy.spatial import cKDTree
+    xyz = idx * SCALE
+    tree = cKDTree(xyz)
+    alive = np.ones(len(idx), bool)
+    for i in np.argsort(-s, kind="stable"):
+        if alive[i]:
+            for j in tree.query_ball_point(xyz[i], dup_um):
+                if j != i:
+                    alive[j] = False          # every other peak in the ball is weaker (stronger ones would already have removed i)
+    return idx[alive], s[alive]
+
+
+def centroid_peaks(heat, floor: float = 0.1, nms=(3, 7, 7), dup_um: float = 0.0):
+    """local maxima of the heat (window nms voxels) above floor, then distance suppression (dup_um, um) -> (voxel idx (N,3), scores (N,))"""
     mx = F.max_pool3d(heat[None, None], tuple(nms), 1, tuple(k // 2 for k in nms))[0, 0]
     idx = torch.nonzero((heat == mx) & (heat > floor))
-    return idx.cpu().numpy(), heat[idx[:, 0], idx[:, 1], idx[:, 2]].cpu().numpy()
+    return dedupe_peaks(idx.cpu().numpy(), heat[idx[:, 0], idx[:, 1], idx[:, 2]].cpu().numpy(), dup_um)

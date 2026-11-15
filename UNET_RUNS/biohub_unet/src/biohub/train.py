@@ -27,7 +27,7 @@ def train(cfg: C.Config, names: list[str], data_dir: str, run_dir: Path):
     model = build_model(cfg.model, builder.out_ch).to(device)
     print(f"features '{cfg.features.kind}': {builder.n_frames} frame(s) -> {builder.out_ch} channels | params {sum(p.numel() for p in model.parameters())/1e6:.2f}M | device {device}")
 
-    ds = CentroidDataset(names, data_dir, tc.steps * tc.bs, dc.patch, dc.margin, dc.sigma_um, builder.before, builder.after, tc.p_pos)
+    ds = CentroidDataset(names, data_dir, tc.steps * tc.bs, dc.patch, dc.margin, dc.sigma_um, builder.before, builder.after, tc.p_pos, tc.seed)
     dl = DataLoader(ds, batch_size=tc.bs, num_workers=tc.workers, drop_last=True, persistent_workers=tc.workers > 0)
 
     est_pf = {}
@@ -38,7 +38,7 @@ def train(cfg: C.Config, names: list[str], data_dir: str, run_dir: Path):
                 est_pf[n] = e / ds.arr(n).shape[0]
         print(f"count loss: {len(est_pf)}/{len(names)} training videos have an estimate" + ("" if est_pf else " -> count loss OFF"))
 
-    crng = np.random.default_rng(0)
+    crng = np.random.default_rng(tc.seed)
     st = dict(r=[], raw=[], out=0, ema=None)
     opt = torch.optim.AdamW(model.parameters(), lr=tc.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=tc.lr, total_steps=tc.steps, pct_start=0.05)
@@ -77,8 +77,10 @@ def train(cfg: C.Config, names: list[str], data_dir: str, run_dir: Path):
                 ct = int(crng.integers(carr.shape[0]))
                 with torch.no_grad():
                     fc = builder(full_stack(carr, ct, ds.scale(n), builder).to(device))
+                model.eval()                                                 # one whole frame must not update BatchNorm statistics nor use dropout
                 with torch.autocast(device, dtype=adt, enabled=use_amp):
                     oc = model(fc)
+                model.train()
                 pc = torch.sigmoid(oc[0, 0].float())
                 r = soft_count(eroded(pc, tc.erode)) / est_pf[n]
                 st["ema"] = r.item() if st["ema"] is None else (1 - tc.ema_a) * st["ema"] + tc.ema_a * r.item()
