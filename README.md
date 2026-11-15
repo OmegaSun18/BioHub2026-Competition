@@ -3,7 +3,7 @@
 Build the dockerfile with:
 * For a public repository:
     ```bash
-    docker build -t biohub2026-fiji:latest .
+    docker build -t biohub2026-fiji-test:latest .
     ```
 * For a private repository (pass a GitHub Personal Access Token):
     ```bash
@@ -16,14 +16,14 @@ Run the dockerfile with:
 mkdir -p /mnt/data/biohub_working
 
 # Start and drop directly into bash (CPU-only node; add --gpus all on GPU nodes)
-docker run -it --name biohub_dev_shankar \
+docker run -it --name biohub_dev_shankar_fiji_test \
     --shm-size=8g \
     -e _JAVA_OPTIONS="-Xmx16g" \
     -v /mnt/data:/mnt/data \
     -v /mnt/data/kaggle/biohub-cell-tracking-during-development:/kaggle/input/biohub-cell-tracking-during-development:ro \
     -v /mnt/data/biohub_working:/kaggle/working \
     -v ~/shankar/BioHub2026-Competition:/workspace \
-    biohub2026-fiji:latest
+    biohub2026-fiji-test:latest
 ```
 
 Add the following snipped to all notebooks or python files before anything is run:
