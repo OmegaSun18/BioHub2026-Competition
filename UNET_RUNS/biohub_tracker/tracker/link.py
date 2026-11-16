@@ -34,6 +34,9 @@ class LinkConfig:
     c_death: float = 12.0
     c_div: float = 11.0
     allow_division: bool = True
+    w_app: float = 1.0                    # weight of the appearance term (only used when features are given)
+    app_sigma: float = 0.5                # a change of this much in log feature value counts as 1 sigma
+    app_cap: float = 9.0                  # cap per feature on the squared normalised change (one odd detection cannot veto a link)
 
 
 def _predict(pos, vel, Ppp, Ppv, Pvv, dt, cfg):
@@ -51,32 +54,42 @@ def _new_state(obs, cfg):
     return dict(pos=obs.copy(), vel=np.zeros((n, 3)), Ppp=np.tile(R, (n, 1)), Ppv=np.zeros((n, 3)), Pvv=np.full((n, 3), cfg.sigma_v0 ** 2))
 
 
-def link(frames: list, real_idx: list, cfg: LinkConfig):
+def link(frames: list, real_idx: list, cfg: LinkConfig, feats: list | None = None):
     """frames[t] = (N_t, 3) positions in um (may be empty). real_idx[t] = number of real frames up to and including t.
+    feats[t] = (N_t, F) log feature values (intensity / DoG / erosion ...) or None: adds  w_app * sum_f min((f_j - f_i)^2 / app_sigma^2, app_cap)  to every link cost
+    (both continuation and daughter slots); the gate stays purely spatial.
     -> edges [(t, i, j)]: detection i of frame t -> detection j of frame t+1."""
     R = np.array(cfg.sigma_m) ** 2
     edges = []
     T = len(frames)
     node = np.arange(len(frames[0]))
     st = _new_state(np.asarray(frames[0], float).reshape(-1, 3), cfg)
+    if feats is not None:
+        st["f"] = np.asarray(feats[0], float).reshape(len(node), -1)
     for t in range(T - 1):
         D = np.asarray(frames[t + 1], float).reshape(-1, 3)
         m, n = len(D), len(node)
         dt = float(real_idx[t + 1] - real_idx[t])
         if n == 0 or m == 0:
             node, st = np.arange(m), _new_state(D, cfg)
+            if feats is not None:
+                st["f"] = np.asarray(feats[t + 1], float).reshape(m, -1)
             continue
         p, pp, pv, vv = _predict(st["pos"], st["vel"], st["Ppp"], st["Ppv"], st["Pvv"], dt, cfg)
         S = pp + R                                                              # (n, 3) innovation variance
         diff = D[None, :, :] - p[:, None, :]                                    # (n, m, 3)
         chi = (diff ** 2 / S[:, None, :]).sum(-1)
         cost = np.full((2 * n + m, m + 2 * n), BIG)
-        a = np.where(chi <= cfg.gate, chi, BIG)
+        app = 0.0
+        if feats is not None:
+            Df = np.asarray(feats[t + 1], float).reshape(m, -1)
+            app = cfg.w_app * np.minimum((Df[None, :, :] - st["f"][:, None, :]) ** 2 / cfg.app_sigma ** 2, cfg.app_cap).sum(-1)
+        a = np.where(chi <= cfg.gate, chi + app, BIG)
         cost[:n, :m] = a
         cost[np.arange(n), m + np.arange(n)] = cfg.c_death
         if cfg.allow_division:
             chiB = (diff ** 2 / (S + cfg.sigma_div ** 2)[:, None, :]).sum(-1)
-            cost[n:2 * n, :m] = np.where(chiB <= cfg.gate_div, chiB + cfg.c_div, BIG)
+            cost[n:2 * n, :m] = np.where(chiB <= cfg.gate_div, chiB + app + cfg.c_div, BIG)
             cost[n + np.arange(n), m + n + np.arange(n)] = 0.0
         cost[2 * n + np.arange(m), np.arange(m)] = cfg.c_birth
         cost[2 * n:, m:] = 0.0
@@ -98,6 +111,8 @@ def link(frames: list, real_idx: list, cfg: LinkConfig):
                 child_of[int(B[i])] = i
                 fresh.add(int(A[i])); fresh.add(int(B[i]))                      # both daughters start new filters
         ns = _new_state(D, cfg)
+        if feats is not None:
+            ns["f"] = Df
         for j, i in child_of.items():
             if j in fresh:
                 continue
