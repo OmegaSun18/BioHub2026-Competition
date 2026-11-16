@@ -408,15 +408,15 @@ def main() -> None:
             ),
             os.path.join(BASE_OUTPUT_DIR, "output_pipeline2"),
         ),
-        # (
-        #     "pipeline3_stardist3d_lap",
-        #     lambda vol, scale, ij_gw: detect_spots_stardist_3d(
-        #         vol,
-        #         scale_zyx=scale,
-        #         model_name=STARDIST_MODEL_NAME,
-        #     ),
-        #     os.path.join(BASE_OUTPUT_DIR, "output_pipeline3"),
-        # ),
+        (
+            "pipeline3_stardist3d_lap",
+            lambda vol, scale, ij_gw: detect_spots_stardist_3d(
+                vol,
+                scale_zyx=scale,
+                model_name=STARDIST_MODEL_NAME,
+            ),
+            os.path.join(BASE_OUTPUT_DIR, "output_pipeline3"),
+        ),
     ]
 
     all_summaries = []
