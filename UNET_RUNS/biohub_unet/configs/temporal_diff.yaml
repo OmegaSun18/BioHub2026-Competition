@@ -1,0 +1,4 @@
+inherit: base.yaml
+name: temporal_diff
+features:
+  kind: temporal_diff    # [raw_t, raw_t - raw_t-1, raw_t+1 - raw_t, P_t]   (experiment: same information as temporal_stack)

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biohub"
+version = "0.1.0"
+description = "Centroid detection (and later tracking) for the Biohub cell-tracking data"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "scipy", "pyyaml", "pyarrow", "zarr", "tracksdata", "torch", "matplotlib"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+biohub = "biohub.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

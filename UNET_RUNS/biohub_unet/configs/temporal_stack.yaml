@@ -1,0 +1,4 @@
+inherit: base.yaml
+name: temporal_stack
+features:
+  kind: temporal_stack   # [raw_t-1, raw_t, raw_t+1, P_t]

@@ -1,0 +1,4 @@
+inherit: base.yaml
+name: raw_only
+features:
+  kind: raw_only         # [raw_t]  (no engineered feature)
