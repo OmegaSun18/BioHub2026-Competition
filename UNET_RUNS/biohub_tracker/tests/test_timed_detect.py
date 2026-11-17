@@ -71,3 +71,16 @@ def test_select_videos_matches_cli_rule():
     got = select_videos(names, 0.2, 8001)
     rng = np.random.default_rng(8001)
     assert got == sorted(rng.choice(names, max(1, round(0.2 * len(names))), replace=False).tolist()) and len(got) == 40
+
+
+def test_val_split_matches_biohub(tmp_path):
+    from biohub import config as C
+    from biohub.data import io
+    from biohub.data.split import split_videos
+    make_videos(tmp_path / "root" / "dev", n=5)
+    run = tmp_path / "r"
+    make_ckpt(run, "raw_only", "")
+    cfg = C.load_config(run / "config.yaml")
+    expect = split_videos(io.list_videos(tmp_path / "root" / "dev"), cfg.data.n_val, cfg.data.split_seed)[1]
+    timed_main(["--run-dir", str(run), "--data-dir", str(tmp_path / "root" / "dev"), "--out-dir", str(tmp_path / "o"), "--split", "val", "--device", "cpu"])
+    assert sorted(p.stem for p in (tmp_path / "o" / "detections").glob("*.parquet")) == sorted(expect) and len(expect) >= 1

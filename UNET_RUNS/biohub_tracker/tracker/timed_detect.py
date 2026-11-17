@@ -33,6 +33,7 @@ def main(argv=None):
     ap.add_argument("--run-dir", required=True)
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--out-dir", required=True)
+    ap.add_argument("--split", choices=["all", "val"], default="all", help="val = the held-out validation videos of the model's own train/val split (what `biohub ... --split val` uses); apply to DEV data")
     ap.add_argument("--frac", type=float, default=1.0)
     ap.add_argument("--frac-seed", type=int, default=8001)
     ap.add_argument("--max-videos", type=int, default=None, help="only the first N of the selected videos (for a quick timing)")
@@ -54,14 +55,19 @@ def main(argv=None):
     sync = (lambda: torch.cuda.synchronize()) if dev.startswith("cuda") else (lambda: None)
     run, out = Path(a.run_dir), Path(a.out_dir)
     (out / "detections").mkdir(parents=True, exist_ok=True)
-    ev = C.load_config(run / "config.yaml", [f"eval.dup_um={a.dup_um}"]).eval
+    rcfg = C.load_config(run / "config.yaml", [f"eval.dup_um={a.dup_um}"])
+    ev = rcfg.eval
 
     load0 = os.getloadavg()[0]
     t0 = pc()
     model, cfg, builder = load_checkpoint(run / "ckpt" / "last.pt", dev)
     model_load_s = pc() - t0
     model.eval()
-    names = select_videos(io.list_videos(a.data_dir), a.frac, a.frac_seed)
+    names = io.list_videos(a.data_dir)
+    if a.split == "val":
+        from biohub.data.split import split_videos
+        names = split_videos(names, rcfg.data.n_val, rcfg.data.split_seed)[1]
+    names = select_videos(names, a.frac, a.frac_seed)
     if a.max_videos:
         names = names[:a.max_videos]
     reuse = builder.n_frames == 1
@@ -102,7 +108,7 @@ def main(argv=None):
     tot = {k: float(sum(v[k] for v in vids)) for k in ("dupcheck_s", "read_s", "filter_s", "net_s", "peaks_s", "detect_s", "write_s")}
     summ = dict(run_dir=str(run), device=dev, torch_threads=torch.get_num_threads(), cpu_count=os.cpu_count(), loadavg_start=load0, loadavg_end=os.getloadavg()[0],
                 model_load_s=model_load_s, warmup_s=warmup_s, n_videos=len(vids), total=tot, mean_detect_s_per_video=tot["detect_s"] / len(vids),
-                mean_detect_s_per_frame=tot["detect_s"] / max(1, sum(v["frames"] for v in vids)), videos=vids, frac=a.frac, frac_seed=a.frac_seed)
+                mean_detect_s_per_frame=tot["detect_s"] / max(1, sum(v["frames"] for v in vids)), videos=vids, frac=a.frac, frac_seed=a.frac_seed, split=a.split)
     (out / "timing_detect.json").write_text(json.dumps(summ, indent=1))
     print(f"model load {model_load_s:.1f}s (not counted) | warm-up {warmup_s:.1f}s (not counted) | detection {tot['detect_s']:.0f}s for {len(vids)} videos = {summ['mean_detect_s_per_video']:.1f} s/video, {summ['mean_detect_s_per_frame']:.2f} s/frame")
 
