@@ -1,0 +1,7 @@
+.git
+.gitignore
+*.webm
+*.pdf
+__pycache__
+*.pyc
+k8s/
