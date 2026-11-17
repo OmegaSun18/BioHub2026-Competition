@@ -1,0 +1,4 @@
+inherit: base.yaml
+name: p_only
+features:
+  kind: p_only           # [P_t]  (engineered feature alone)

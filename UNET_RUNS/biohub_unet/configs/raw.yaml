@@ -1,0 +1,4 @@
+inherit: base.yaml
+name: raw
+features:
+  kind: raw              # [raw_t, P_t]
