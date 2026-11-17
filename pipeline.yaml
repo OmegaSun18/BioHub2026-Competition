@@ -1,0 +1,188 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipeline-config
+data:
+  DETECTION_INFERENCE_CODE: "detect_v1"
+  TRACKING_INFERENCE_CODE: "track_v2"
+  MAX_BATCH_SIZE: "4"
+  BATCH_TIMEOUT: "2.0"
+---
+# ================= DETECTION STAGE =================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cell-detection
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cell-detection
+  template:
+    metadata:
+      labels:
+        app: cell-detection
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: server
+          image: your-registry/biohub-pipeline:latest
+          command: ["python", "/workspace/server.py"]
+          envFrom:
+            - configMapRef:
+                name: pipeline-config
+          env:
+            - name: STAGE_TYPE
+              value: "detection"
+            - name: INFERENCE_CODE
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: DETECTION_INFERENCE_CODE
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 8000
+              name: metrics
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: data-vol
+              mountPath: /mnt/data
+      volumes:
+        - name: data-vol
+          hostPath:
+            path: /mnt/data
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: detection-service
+spec:
+  clusterIP: None # Headless for gRPC load balancing
+  selector:
+    app: cell-detection
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+---
+# ================= TRACKING STAGE =================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cell-tracking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cell-tracking
+  template:
+    metadata:
+      labels:
+        app: cell-tracking
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: server
+          image: your-registry/biohub-pipeline:latest
+          command: ["python", "/workspace/server.py"]
+          env:
+            - name: STAGE_TYPE
+              value: "tracking"
+            - name: INFERENCE_CODE
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: TRACKING_INFERENCE_CODE
+            - name: MAX_BATCH_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: MAX_BATCH_SIZE
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 8000
+              name: metrics
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: data-vol
+              mountPath: /mnt/data
+      volumes:
+        - name: data-vol
+          hostPath:
+            path: /mnt/data
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracking-service
+spec:
+  clusterIP: None
+  selector:
+    app: cell-tracking
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+---
+# ================= PROMETHEUS & GRAFANA =================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.1
+          ports:
+            - containerPort: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.0
+          ports:
+            - containerPort: 3000

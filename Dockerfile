@@ -44,7 +44,7 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
         git clone --branch main --single-branch https://github.com/OmegaSun18/BioHub2026-Competition.git .; \
     fi
 
-# 4. Install Python dependencies (Ubuntu 24.04 allows --break-system-packages in containers)
+# 4. Install Python dependencies (including grpcio-tools and prometheus-client)
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
@@ -57,12 +57,25 @@ ij = imagej.init('/opt/Fiji.app', mode='headless'); \
 TrackMate = scyjava.jimport('fiji.plugin.trackmate.TrackMate'); \
 print('Fiji version:', ij.getVersion(), '| TrackMate loaded:', TrackMate)"
 
-# 6. Create Kaggle-compatible mount points
-RUN mkdir -p /kaggle/input/biohub-cell-tracking-during-development /kaggle/working
+# 6. Create Kaggle-compatible mount points & empty inference_codes directory
+RUN mkdir -p /kaggle/input/biohub-cell-tracking-during-development /kaggle/working /workspace/inference_codes
 
-# 7. Auto-start Xvfb in the background whenever the container launches
+# 7. Copy gRPC proto, model server, and open-loop load generator
+COPY proto/ /workspace/proto/
+COPY server.py load_gen.py /workspace/
+
+# 8. Compile pipeline.proto -> pipeline_pb2.py & pipeline_pb2_grpc.py
+RUN python -m grpc_tools.protoc \
+    -I/workspace/proto \
+    --python_out=/workspace \
+    --grpc_python_out=/workspace \
+    /workspace/proto/pipeline.proto
+
+# 9. Auto-start Xvfb in the background whenever the container launches
 RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1024x768x24 >/dev/null 2>&1 &\nexec "$@"\n' > /usr/local/bin/entrypoint.sh && \
     chmod +x /usr/local/bin/entrypoint.sh
 
+EXPOSE 50051 8000
+
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["/bin/bash"]
+CMD ["python", "/workspace/server.py"]

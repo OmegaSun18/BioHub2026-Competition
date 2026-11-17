@@ -29,3 +29,11 @@ tf-keras==2.20.0
 tqdm>=4.66.0
 jupyterlab>=4.1.0
 ipykernel>=6.29.0
+
+
+# --- Append to existing requirements.txt ---
+grpcio==1.66.0
+grpcio-tools==1.66.0
+grpcio-health-checking==1.66.0
+protobuf>=5.27.0
+prometheus-client==0.21.0

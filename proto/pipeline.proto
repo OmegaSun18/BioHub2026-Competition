@@ -1,0 +1,25 @@
+syntax = "proto3";
+package biohub;
+
+message VideoRequest {
+    string zarr_path = 1;
+}
+
+message DetectionResponse {
+    string zarr_path = 1;
+    string detection_output_path = 2;
+}
+
+message TrackingResponse {
+    string zarr_path = 1;
+    string tracking_output_path = 2;
+    bool assertion_passed = 3;
+}
+
+service CellDetection {
+    rpc Detect(VideoRequest) returns (DetectionResponse) {}
+}
+
+service CellTracking {
+    rpc Track(DetectionResponse) returns (TrackingResponse) {}
+}
